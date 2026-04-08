@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MÄRKTE · Live Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.3/lightweight-charts.standalone.production.js"></script>
+<style>
+:root {
+  --bg: #07090d;
+  --s1: #0c1018;
+  --s2: #111720;
+  --border: #1a2535;
+  --accent: #00d4ff;
+  --green: #00e676;
+  --red: #ff1744;
+  --muted: #3d5268;
+  --text: #b8cdd8;
+  --dim: #506070;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: 'Space Mono', monospace; min-height: 100vh; overflow-x: hidden;
+}
+body::before {
+  content: ''; position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px; pointer-events: none; z-index: 0;
+}
+.z1 { position: relative; z-index: 1; }
+
+/* HEADER */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 36px; border-bottom: 1px solid var(--border);
+  background: rgba(7,9,13,0.9); backdrop-filter: blur(12px);
+  position: sticky; top: 0; z-index: 100;
+}
+.logo { font-family:'Syne',sans-serif; font-size:20px; font-weight:800; letter-spacing:.18em; color:#fff; }
+.logo em { color:var(--accent); font-style:normal; }
+.header-right { display:flex; align-items:center; gap:18px; }
+.live-pill {
+  display:flex; align-items:center; gap:7px; font-size:10px;
+  letter-spacing:.15em; color:var(--green);
+  border:1px solid rgba(0,230,118,.25); border-radius:20px; padding:4px 12px;
+}
+.live-dot { width:7px; height:7px; border-radius:50%; background:var(--green); animation:blink 1.4s infinite; }
+@keyframes blink {
+  0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,230,118,.5)}
+  50%{opacity:.6;box-shadow:0 0 0 5px rgba(0,230,118,0)}
+}
+#clock { font-size:11px; color:var(--dim); letter-spacing:.12em; }
+
+/* TICKER */
+.ticker-wrap { overflow:hidden; border-bottom:1px solid var(--border); background:var(--s1); padding:9px 0; }
+.ticker-track { display:flex; gap:52px; animation:scroll 40s linear infinite; white-space:nowrap; }
+@keyframes scroll { to { transform:translateX(-50%); } }
+.t-item { display:flex; align-items:center; gap:9px; font-size:11px; letter-spacing:.07em; }
+.t-sym { color:var(--dim); } .t-price { color:#fff; font-weight:700; }
+.t-chg.up { color:var(--green); } .t-chg.dn { color:var(--red); }
+
+/* LAYOUT */
+main { padding:28px 36px; display:flex; flex-direction:column; gap:22px; }
+
+/* QUOTE CARDS */
+.quote-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+.qcard {
+  background:var(--s1); border:1px solid var(--border); border-radius:6px;
+  padding:20px 22px; cursor:pointer; transition:border-color .25s, box-shadow .25s;
+  position:relative; overflow:hidden;
+}
+.qcard::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg, var(--c, var(--accent)), transparent);
+  opacity:0; transition:opacity .25s;
+}
+.qcard:hover::before, .qcard.active::before { opacity:1; }
+.qcard:hover, .qcard.active { border-color:var(--c, var(--accent)); box-shadow:0 0 22px rgba(0,212,255,.1); }
+.qcard-sym { font-size:10px; letter-spacing:.2em; color:var(--dim); margin-bottom:8px; }
+.qcard-price { font-family:'Syne',sans-serif; font-size:24px; font-weight:800; color:#fff; letter-spacing:-.02em; }
+.qcard-meta { display:flex; align-items:center; gap:8px; margin-top:7px; }
+.pill { font-size:10px; font-weight:700; padding:2px 8px; border-radius:3px; letter-spacing:.05em; }
+.pill.up { background:rgba(0,230,118,.15); color:var(--green); }
+.pill.dn { background:rgba(255,23,68,.15); color:var(--red); }
+.qcard-name { font-size:10px; color:var(--dim); margin-top:4px; letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.qcard-spark { margin-top:12px; height:36px; }
+.qcard-spark svg { width:100%; height:100%; }
+.shimmer { background:linear-gradient(90deg,var(--s2) 25%,var(--border) 50%,var(--s2) 75%); background-size:200% 100%; animation:shimmer 1.5s infinite; border-radius:4px; height:20px; }
+@keyframes shimmer { to{background-position:-200% 0} }
+
+/* MAIN ROW */
+.main-row { display:grid; grid-template-columns:1fr 320px; gap:18px; }
+
+/* CHART PANEL */
+.chart-panel {
+  background:var(--s1); border:1px solid var(--border); border-radius:6px;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.chart-head {
+  display:flex; align-items:flex-start; justify-content:space-between;
+  padding:22px 24px 16px;
+}
+.chart-sym { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; color:#fff; }
+.chart-fullname { font-size:11px; color:var(--dim); margin-top:3px; letter-spacing:.07em; }
+.chart-live-price { font-family:'Syne',sans-serif; font-size:26px; font-weight:800; margin-top:6px; }
+.chart-controls { display:flex; flex-direction:column; align-items:flex-end; gap:7px; }
+.tf-row, .type-row { display:flex; gap:4px; }
+.tf, .type-btn {
+  background:none; border:1px solid var(--border); color:var(--dim);
+  padding:5px 11px; border-radius:3px; font-family:'Space Mono',monospace;
+  font-size:10px; cursor:pointer; letter-spacing:.1em; transition:all .2s;
+}
+.tf:hover,.tf.on,.type-btn:hover,.type-btn.on { border-color:var(--accent); color:var(--accent); }
+#chartContainer { flex:1; min-height:280px; }
+.chart-footer {
+  padding:10px 24px; border-top:1px solid var(--border);
+  display:flex; gap:20px; font-size:10px; color:var(--dim); letter-spacing:.08em; flex-wrap:wrap;
+}
+.cf-val { color:var(--text); margin-left:5px; }
+
+/* WATCHLIST */
+.watchlist { background:var(--s1); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+.wl-head {
+  padding:18px 20px; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.wl-title { font-family:'Syne',sans-serif; font-size:14px; font-weight:800; color:#fff; letter-spacing:.05em; }
+.wl-count { font-size:10px; color:var(--dim); background:var(--s2); border:1px solid var(--border); padding:2px 9px; border-radius:20px; }
+.wl-row {
+  display:flex; align-items:center; padding:13px 20px; gap:10px;
+  border-bottom:1px solid rgba(26,37,53,.6); cursor:pointer; transition:background .18s;
+}
+.wl-row:last-child { border-bottom:none; }
+.wl-row:hover { background:var(--s2); }
+.wl-row.active { background:rgba(0,212,255,.05); border-left:2px solid var(--accent); padding-left:18px; }
+.wl-icon {
+  width:34px; height:34px; border-radius:7px; display:flex; align-items:center;
+  justify-content:center; font-family:'Syne',sans-serif; font-size:10px; font-weight:800;
+  flex-shrink:0; letter-spacing:.04em;
+}
+.wl-info { flex:1; min-width:0; }
+.wl-sym { font-size:12px; font-weight:700; color:#fff; letter-spacing:.06em; }
+.wl-name { font-size:9px; color:var(--dim); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wl-spark { width:46px; height:26px; flex-shrink:0; }
+.wl-spark svg { width:100%; height:100%; }
+.wl-nums { text-align:right; flex-shrink:0; }
+.wl-price { font-size:12px; font-weight:700; color:#fff; }
+.wl-pct { font-size:10px; margin-top:2px; font-weight:700; }
+.up { color:var(--green); } .dn { color:var(--red); }
+
+/* BOTTOM */
+.bottom-row { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+.stat-card { background:var(--s1); border:1px solid var(--border); border-radius:6px; padding:22px; }
+.stat-label { font-size:10px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase; margin-bottom:14px; }
+.stat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.stat-item { background:var(--s2); border:1px solid var(--border); border-radius:4px; padding:12px; }
+.stat-k { font-size:9px; letter-spacing:.1em; color:var(--dim); margin-bottom:6px; }
+.stat-v { font-size:14px; font-weight:700; color:#fff; font-family:'Syne',sans-serif; }
+.hm-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; margin-top:4px; }
+.hm-cell {
+  aspect-ratio:1; border-radius:4px; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:2px;
+  cursor:pointer; transition:transform .2s, filter .2s;
+}
+.hm-cell:hover { transform:scale(1.07); filter:brightness(1.3); }
+.hm-sym { font-size:9px; font-weight:700; }
+.hm-pct { font-size:8px; opacity:.85; }
+
+/* TOAST */
+#toast {
+  position:fixed; bottom:24px; right:24px; background:var(--s2);
+  border:1px solid var(--border); color:var(--text); font-size:11px;
+  padding:10px 18px; border-radius:4px; opacity:0; transform:translateY(8px);
+  transition:all .3s; pointer-events:none; z-index:999; letter-spacing:.06em;
+}
+#toast.show { opacity:1; transform:translateY(0); }
+
+/* ERROR */
+.error-box {
+  display:flex; align-items:center; justify-content:center;
+  height:100%; min-height:200px; color:var(--dim); font-size:12px;
+  flex-direction:column; gap:8px; letter-spacing:.08em;
+}
+
+/* ANIMS */
+.qcard, .chart-panel, .watchlist, .stat-card { animation:fadeUp .5s cubic-bezier(.4,0,.2,1) both; }
+.qcard:nth-child(1){animation-delay:.04s} .qcard:nth-child(2){animation-delay:.09s}
+.qcard:nth-child(3){animation-delay:.14s} .qcard:nth-child(4){animation-delay:.19s}
+.chart-panel{animation-delay:.24s} .watchlist{animation-delay:.28s}
+@keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+
+@media(max-width:1080px){ .quote-grid{grid-template-columns:repeat(2,1fr)} .main-row{grid-template-columns:1fr} .bottom-row{grid-template-columns:1fr} }
+@media(max-width:600px){ header,main{padding:14px 16px} .quote-grid{grid-template-columns:1fr 1fr} }
+</style>
+</head>
+<body>
+<div class="z1">
+
+<header>
+  <div class="logo">MÄRK<em>T</em>E<span style="font-size:11px;font-family:'Space Mono';font-weight:400;letter-spacing:.1em;color:var(--dim);margin-left:14px;">LIVE</span></div>
+  <div class="header-right">
+    <div class="live-pill"><div class="live-dot"></div>ECHTZEIT</div>
+    <div id="clock">--:--:--</div>
+  </div>
+</header>
+
+<div class="ticker-wrap">
+  <div class="ticker-track" id="tickerTrack">
+    <div class="t-item"><span class="t-sym">···</span><span class="t-price">Lade Kurse…</span></div>
+  </div>
+</div>
+
+<main>
+  <div class="quote-grid" id="quoteGrid">
+    ${[0,1,2,3].map(()=>`<div class="qcard"><div class="shimmer" style="width:50%;margin-bottom:12px"></div><div class="shimmer" style="width:75%;height:28px"></div></div>`).join('')}
+  </div>
+
+  <div class="main-row">
+    <div class="chart-panel">
+      <div class="chart-head">
+        <div>
+          <div class="chart-sym" id="cSym">—</div>
+          <div class="chart-fullname" id="cFull">Wähle einen Titel aus der Watchlist</div>
+          <div class="chart-live-price" id="cLive" style="color:var(--accent)">—</div>
+        </div>
+        <div class="chart-controls">
+          <div class="tf-row">
+            <button class="tf on" onclick="setTF(this,'1day','1month')">1M</button>
+            <button class="tf" onclick="setTF(this,'1day','3month')">3M</button>
+            <button class="tf" onclick="setTF(this,'1day','1year')">1J</button>
+            <button class="tf" onclick="setTF(this,'1week','5year')">5J</button>
+          </div>
+          <div class="type-row">
+            <button class="type-btn on" onclick="setType(this,'candle')">Kerze</button>
+            <button class="type-btn" onclick="setType(this,'line')">Linie</button>
+            <button class="type-btn" onclick="setType(this,'area')">Fläche</button>
+          </div>
+        </div>
+      </div>
+      <div id="chartContainer"></div>
+      <div class="chart-footer">
+        <span>OPEN<span class="cf-val" id="cfOpen">—</span></span>
+        <span>HIGH<span class="cf-val" id="cfHigh">—</span></span>
+        <span>LOW<span class="cf-val" id="cfLow">—</span></span>
+        <span>CLOSE<span class="cf-val" id="cfClose">—</span></span>
+        <span>VOL<span class="cf-val" id="cfVol">—</span></span>
+      </div>
+    </div>
+
+    <div class="watchlist">
+      <div class="wl-head">
+        <div class="wl-title">WATCHLIST</div>
+        <div class="wl-count" id="wlCount">— Titel</div>
+      </div>
+      <div id="wlList"><div style="padding:20px;color:var(--dim);font-size:11px">Lade…</div></div>
+    </div>
+  </div>
+
+  <div class="bottom-row">
+    <div class="stat-card">
+      <div class="stat-label">Kennzahlen · <span id="statSym" style="color:var(--accent)">—</span></div>
+      <div class="stat-grid" id="statGrid">
+        ${['52W HOCH','52W TIEF','Ø VOLUMEN','WÄHRUNG','BÖRSE','TYP'].map(k=>`<div class="stat-item"><div class="stat-k">${k}</div><div class="stat-v shimmer"></div></div>`).join('')}
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Tages-Heatmap</div>
+      <div class="hm-grid" id="hmGrid"><div style="color:var(--dim);font-size:11px;grid-column:span 5">Lade…</div></div>
+    </div>
+  </div>
+</main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API_KEY = '930c8e3e9bcb4e9492185357ed994dcc';
+const BASE    = 'https://api.twelvedata.com';
+
+const WATCHLIST = [
+  { sym:'SAP',    name:'SAP SE',              color:'#0066cc', exchange:'XETRA' },
+  { sym:'SIE',    name:'Siemens AG',           color:'#00838f', exchange:'XETRA' },
+  { sym:'ALV',    name:'Allianz SE',           color:'#003a70', exchange:'XETRA' },
+  { sym:'BMW',    name:'BMW AG',               color:'#1c69d4', exchange:'XETRA' },
+  { sym:'DTE',    name:'Deutsche Telekom',     color:'#e20074', exchange:'XETRA' },
+  { sym:'MRK',    name:'Merck KGaA',           color:'#009b77', exchange:'XETRA' },
+  { sym:'DBK',    name:'Deutsche Bank',        color:'#006ab3', exchange:'XETRA' },
+  { sym:'BAYN',   name:'Bayer AG',             color:'#10a54a', exchange:'XETRA' },
+  { sym:'AAPL',   name:'Apple Inc.',           color:'#888',    exchange:'NASDAQ' },
+  { sym:'MSFT',   name:'Microsoft Corp.',      color:'#00a4ef', exchange:'NASDAQ' },
+];
+
+const HM_SYMS = ['SAP','SIE','ALV','BMW','DTE','MRK','DBK','BAYN','VOW3','BAS','IFX','ADS','HEN3','RWE','AAPL'];
+
+let state = { sym:'SAP', exchange:'XETRA', tf:'1day', range:'1month', chartType:'candle', quotes:{}, chart:null, series:null };
+
+// ── CLOCK ──────────────────────────────────────────────────────────────────
+setInterval(()=>{
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' MEZ';
+},1000);
+
+// ── TOAST ──────────────────────────────────────────────────────────────────
+function toast(msg,dur=2800){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),dur);
+}
+
+// ── API HELPERS ────────────────────────────────────────────────────────────
+async function api(path, params={}) {
+  params.apikey = API_KEY;
+  const qs = new URLSearchParams(params).toString();
+  const r  = await fetch(`${BASE}${path}?${qs}`);
+  if (!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+
+async function fetchQuotes(symbols) {
+  // Twelve Data supports comma-separated batch quotes
+  const symsWithEx = symbols.map(s => {
+    const w = WATCHLIST.find(w=>w.sym===s);
+    return w ? `${s}:${w.exchange}` : s;
+  });
+  try {
+    const data = await api('/price', { symbol: symsWithEx.join(',') });
+    // Returns { SYM: {price:...}, ... } for multiple or {price:...} for single
+    const result = {};
+    symbols.forEach((s,i) => {
+      const key = symsWithEx[i];
+      const val = data[key] ?? data[s] ?? data;
+      if (val && val.price) result[s] = parseFloat(val.price);
+    });
+    return result;
+  } catch(e) { return {}; }
+}
+
+async function fetchQuoteDetail(sym, exchange) {
+  try {
+    const symEx = exchange ? `${sym}:${exchange}` : sym;
+    const data  = await api('/quote', { symbol: symEx });
+    return {
+      sym,
+      name:     data.name ?? sym,
+      price:    parseFloat(data.close),
+      open:     parseFloat(data.open),
+      high:     parseFloat(data.high),
+      low:      parseFloat(data.low),
+      prev:     parseFloat(data.previous_close),
+      chg:      parseFloat(data.percent_change),
+      vol:      parseInt(data.volume),
+      currency: data.currency ?? 'EUR',
+      exchange: data.exchange ?? exchange,
+      type:     data.type ?? '—',
+      fiftyTwoHigh: parseFloat(data.fifty_two_week?.high),
+      fiftyTwoLow:  parseFloat(data.fifty_two_week?.low),
+    };
+  } catch(e) { return null; }
+}
+
+async function fetchHistory(sym, exchange, interval, outputsize=300) {
+  try {
+    const symEx = exchange ? `${sym}:${exchange}` : sym;
+    const data  = await api('/time_series', { symbol:symEx, interval, outputsize, format:'JSON' });
+    if (!data.values) return [];
+    return data.values.reverse().map(d => ({
+      time:   Math.floor(new Date(d.datetime).getTime()/1000),
+      open:   parseFloat(d.open),
+      high:   parseFloat(d.high),
+      low:    parseFloat(d.low),
+      close:  parseFloat(d.close),
+      volume: parseInt(d.volume)||0,
+    }));
+  } catch(e) { return []; }
+}
+
+// ── SPARKLINE SVG ──────────────────────────────────────────────────────────
+function makeSpark(pts, color, W=50, H=26) {
+  if (!pts||pts.length<2) return '<svg></svg>';
+  const min=Math.min(...pts), max=Math.max(...pts), rng=max-min||1;
+  const xs=pts.map((_,i)=>(i/(pts.length-1))*W);
+  const ys=pts.map(p=>H-((p-min)/rng)*(H*.86)-H*.07);
+  const d=xs.map((x,i)=>`${i?'L':'M'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+// ── QUOTE CARDS ────────────────────────────────────────────────────────────
+const CARD_CFG = [
+  { sym:'SAP',  exchange:'XETRA',  label:'SAP SE',          color:'#0066cc' },
+  { sym:'SIE',  exchange:'XETRA',  label:'Siemens AG',       color:'#00838f' },
+  { sym:'AAPL', exchange:'NASDAQ', label:'Apple Inc.',        color:'#999' },
+  { sym:'MSFT', exchange:'NASDAQ', label:'Microsoft Corp.',   color:'#00a4ef' },
+];
+
+async function buildQuoteCards() {
+  const results = await Promise.all(CARD_CFG.map(c=>fetchQuoteDetail(c.sym,c.exchange)));
+  document.getElementById('quoteGrid').innerHTML = results.map((q,i)=>{
+    const cfg=CARD_CFG[i];
+    if (!q) return `<div class="qcard" style="--c:${cfg.color}"><div class="qcard-sym">${cfg.label}</div><div style="color:var(--dim);font-size:11px">Keine Daten</div></div>`;
+    const up=q.chg>=0, sign=up?'+':'';
+    const pts=[q.prev,q.open,(q.high+q.low)/2,q.price];
+    return `<div class="qcard ${i===0?'active':''}" style="--c:${cfg.color}" onclick="selectSym('${cfg.sym}','${cfg.exchange}','${q.name||cfg.label}',this)">
+      <div class="qcard-sym">${cfg.label}</div>
+      <div class="qcard-price">${q.price.toFixed(2)}</div>
+      <div class="qcard-meta">
+        <span class="pill ${up?'up':'dn'}">${sign}${q.chg.toFixed(2)}%</span>
+        <span style="font-size:10px;color:var(--dim)">${sign}${(q.price-q.prev).toFixed(2)} ${q.currency}</span>
+      </div>
+      <div class="qcard-name">${q.name}</div>
+      <div class="qcard-spark">${makeSpark(pts,up?'#00e676':'#ff1744',200,36)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── WATCHLIST ──────────────────────────────────────────────────────────────
+async function buildWatchlist() {
+  const results = await Promise.all(WATCHLIST.map(w=>fetchQuoteDetail(w.sym,w.exchange)));
+  WATCHLIST.forEach((w,i)=>{ if(results[i]) state.quotes[w.sym]=results[i]; });
+
+  document.getElementById('wlList').innerHTML = WATCHLIST.map((w,i)=>{
+    const q=results[i];
+    if (!q) return `<div class="wl-row"><div class="wl-info"><div class="wl-sym">${w.sym}</div><div class="wl-name">Keine Daten</div></div></div>`;
+    const up=q.chg>=0, sign=up?'+':'';
+    const pts=[q.prev,q.open,(q.high+q.low)/2,q.price];
+    const initials=w.sym.slice(0,4);
+    return `<div class="wl-row ${w.sym===state.sym?'active':''}" onclick="selectSym('${w.sym}','${w.exchange}','${q.name||w.name}',null)">
+      <div class="wl-icon" style="background:${w.color}22;color:${w.color};border:1px solid ${w.color}44">${initials}</div>
+      <div class="wl-info">
+        <div class="wl-sym">${w.sym}</div>
+        <div class="wl-name">${q.name||w.name}</div>
+      </div>
+      <div class="wl-spark">${makeSpark(pts,up?'#00e676':'#ff1744')}</div>
+      <div class="wl-nums">
+        <div class="wl-price">${q.price.toFixed(2)}</div>
+        <div class="wl-pct ${up?'up':'dn'}">${sign}${q.chg.toFixed(2)}%</div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('wlCount').textContent = WATCHLIST.length+' Titel';
+  buildTicker(results);
+}
+
+// ── TICKER ─────────────────────────────────────────────────────────────────
+function buildTicker(results) {
+  const items = [...WATCHLIST,...WATCHLIST].map((w,i)=>{
+    const q=results[i%WATCHLIST.length];
+    if(!q) return '';
+    const up=q.chg>=0, sign=up?'+':'';
+    return `<div class="t-item"><span class="t-sym">${w.sym}</span><span class="t-price">${q.price.toFixed(2)}</span><span class="t-chg ${up?'up':'dn'}">${sign}${q.chg.toFixed(2)}%</span></div>`;
+  }).join('');
+  document.getElementById('tickerTrack').innerHTML = items;
+}
+
+// ── CHART ──────────────────────────────────────────────────────────────────
+function initChart() {
+  const container=document.getElementById('chartContainer');
+  container.innerHTML='';
+  if (state.chart) { try{state.chart.remove()}catch(e){} }
+
+  state.chart = LightweightCharts.createChart(container, {
+    layout: { background:{color:'#0c1018'}, textColor:'#506070' },
+    grid: { vertLines:{color:'#1a2535'}, horzLines:{color:'#1a2535'} },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine:{color:'#00d4ff',width:1,style:3,labelBackgroundColor:'#111720'},
+      horzLine:{color:'#00d4ff',width:1,style:3,labelBackgroundColor:'#111720'},
+    },
+    rightPriceScale: { borderColor:'#1a2535', scaleMargins:{top:.08,bottom:.08} },
+    timeScale: { borderColor:'#1a2535', timeVisible:true, secondsVisible:false },
+    handleScroll:true, handleScale:true,
+  });
+
+  state.chart.subscribeCrosshairMove(param=>{
+    if (!param.point || !state.series) return;
+    const d=param.seriesData.get(state.series);
+    if (!d) return;
+    if (state.chartType==='candle') {
+      document.getElementById('cfOpen').textContent  = ' '+(d.open?.toFixed(2)??'—');
+      document.getElementById('cfHigh').textContent  = ' '+(d.high?.toFixed(2)??'—');
+      document.getElementById('cfLow').textContent   = ' '+(d.low?.toFixed(2)??'—');
+      document.getElementById('cfClose').textContent = ' '+(d.close?.toFixed(2)??'—');
+    } else {
+      document.getElementById('cfClose').textContent = ' '+((d.value??d.close)?.toFixed(2)??'—');
+    }
+  });
+}
+
+async function loadChart() {
+  document.getElementById('chartContainer').innerHTML =
+    '<div class="error-box"><div class="shimmer" style="width:60%;height:16px"></div><div class="shimmer" style="width:40%;height:12px;margin-top:8px"></div></div>';
+
+  const bars = await fetchHistory(state.sym, state.exchange, state.tf, 300);
+
+  if (!bars.length) {
+    document.getElementById('chartContainer').innerHTML =
+      '<div class="error-box">⚠ Keine Chart-Daten verfügbar</div>';
+    toast('⚠ Chart-Daten konnten nicht geladen werden');
+    return;
+  }
+
+  initChart();
+
+  if (state.chartType==='candle') {
+    state.series = state.chart.addCandlestickSeries({
+      upColor:'#00e676', downColor:'#ff1744',
+      borderUpColor:'#00e676', borderDownColor:'#ff1744',
+      wickUpColor:'#00e676', wickDownColor:'#ff1744',
+    });
+    state.series.setData(bars.map(d=>({time:d.time,open:d.open,high:d.high,low:d.low,close:d.close})));
+    const last=bars[bars.length-1];
+    document.getElementById('cfOpen').textContent  = ' '+last.open.toFixed(2);
+    document.getElementById('cfHigh').textContent  = ' '+last.high.toFixed(2);
+    document.getElementById('cfLow').textContent   = ' '+last.low.toFixed(2);
+    document.getElementById('cfClose').textContent = ' '+last.close.toFixed(2);
+    document.getElementById('cfVol').textContent   = ' '+(last.volume?(last.volume/1e6).toFixed(2)+'M':'—');
+  } else if (state.chartType==='line') {
+    state.series = state.chart.addLineSeries({ color:'#00d4ff', lineWidth:2, crosshairMarkerRadius:4 });
+    state.series.setData(bars.map(d=>({time:d.time,value:d.close})));
+  } else {
+    state.series = state.chart.addAreaSeries({
+      lineColor:'#00d4ff', topColor:'rgba(0,212,255,0.25)', bottomColor:'rgba(0,212,255,0)', lineWidth:2,
+    });
+    state.series.setData(bars.map(d=>({time:d.time,value:d.close})));
+  }
+
+  // Volume histogram
+  const volSeries = state.chart.addHistogramSeries({
+    color:'rgba(0,212,255,0.15)', priceFormat:{type:'volume'},
+    priceScaleId:'vol', scaleMargins:{top:.85,bottom:0},
+  });
+  volSeries.setData(bars.map(d=>({
+    time:d.time, value:d.volume,
+    color: d.close>=d.open ? 'rgba(0,230,118,0.2)' : 'rgba(255,23,68,0.2)',
+  })));
+
+  state.chart.timeScale().fitContent();
+}
+
+// ── KEY STATS ──────────────────────────────────────────────────────────────
+function buildStats(q) {
+  if (!q) return;
+  document.getElementById('statSym').textContent = q.sym;
+  const fmt = v => isNaN(v) ? '—' : v.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtVol = v => !v ? '—' : v>1e6 ? (v/1e6).toFixed(1)+'M' : v>1e3 ? (v/1e3).toFixed(0)+'K' : v;
+  const rows = [
+    ['52W HOCH', fmt(q.fiftyTwoHigh)],
+    ['52W TIEF',  fmt(q.fiftyTwoLow)],
+    ['VOLUMEN',   fmtVol(q.vol)],
+    ['WÄHRUNG',   q.currency||'—'],
+    ['BÖRSE',     q.exchange||'—'],
+    ['OPEN',      fmt(q.open)],
+  ];
+  document.getElementById('statGrid').innerHTML = rows.map(([k,v])=>`
+    <div class="stat-item"><div class="stat-k">${k}</div><div class="stat-v">${v}</div></div>`).join('');
+}
+
+// ── HEATMAP ────────────────────────────────────────────────────────────────
+async function buildHeatmap() {
+  const results = await Promise.all(HM_SYMS.map(s=>{
+    const w=WATCHLIST.find(w=>w.sym===s);
+    return fetchQuoteDetail(s, w?.exchange||'XETRA');
+  }));
+  document.getElementById('hmGrid').innerHTML = results.map((q,i)=>{
+    const sym=HM_SYMS[i];
+    if (!q) return `<div class="hm-cell" style="background:var(--s2);color:var(--dim)"><div class="hm-sym">${sym}</div><div class="hm-pct">—</div></div>`;
+    const up=q.chg>=0, int=Math.min(Math.abs(q.chg)/5,1);
+    const bg=up?`rgba(0,230,118,${.15+int*.45})`:`rgba(255,23,68,${.15+int*.45})`;
+    const col=up?'#00e676':'#ff1744';
+    return `<div class="hm-cell" style="background:${bg};color:${col}" title="${sym}: ${q.chg>=0?'+':''}${q.chg.toFixed(2)}%" onclick="selectSym('${sym}','XETRA','${q.name||sym}',null)">
+      <div class="hm-sym">${sym}</div>
+      <div class="hm-pct">${q.chg>=0?'+':''}${q.chg.toFixed(1)}%</div>
+    </div>`;
+  }).join('');
+}
+
+// ── SELECT ─────────────────────────────────────────────────────────────────
+async function selectSym(sym, exchange, name, cardEl) {
+  state.sym = sym; state.exchange = exchange;
+
+  document.querySelectorAll('.qcard').forEach(c=>c.classList.remove('active'));
+  if (cardEl) cardEl.classList.add('active');
+  document.querySelectorAll('.wl-row').forEach(r=>{
+    r.classList.toggle('active', r.getAttribute('onclick')?.includes(`'${sym}'`));
+  });
+
+  document.getElementById('cSym').textContent  = sym;
+  document.getElementById('cFull').textContent = name;
+
+  let q = state.quotes[sym];
+  if (!q) {
+    q = await fetchQuoteDetail(sym, exchange);
+    if (q) state.quotes[sym] = q;
+  }
+  if (q) {
+    const up=q.chg>=0, sign=up?'+':'';
+    const liveEl=document.getElementById('cLive');
+    liveEl.textContent = `${q.price.toFixed(2)} ${q.currency} (${sign}${q.chg.toFixed(2)}%)`;
+    liveEl.style.color = up ? 'var(--green)' : 'var(--red)';
+    buildStats(q);
+  }
+
+  loadChart();
+}
+
+function setTF(btn, interval, range) {
+  document.querySelectorAll('.tf').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  state.tf=interval; state.range=range;
+  loadChart();
+}
+
+function setType(btn, type) {
+  document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  state.chartType=type;
+  loadChart();
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+async function init() {
+  toast('⬇ Verbinde mit Twelve Data…',3000);
+  initChart();
+
+  // Load in parallel
+  await Promise.all([buildQuoteCards(), buildWatchlist(), buildHeatmap()]);
+
+  // Load chart for default sym
+  const q = state.quotes[state.sym];
+  if (q) {
+    const up=q.chg>=0, sign=up?'+':'';
+    document.getElementById('cSym').textContent  = state.sym;
+    document.getElementById('cFull').textContent = q.name;
+    document.getElementById('cLive').textContent = `${q.price.toFixed(2)} ${q.currency} (${sign}${q.chg.toFixed(2)}%)`;
+    document.getElementById('cLive').style.color = up?'var(--green)':'var(--red)';
+    buildStats(q);
+  }
+  await loadChart();
+  toast('✓ Live-Daten geladen');
+
+  // Auto-refresh every 60 seconds
+  setInterval(async()=>{
+    await buildWatchlist();
+    if (state.quotes[state.sym]) {
+      const q=state.quotes[state.sym];
+      const up=q.chg>=0, sign=up?'+':'';
+      document.getElementById('cLive').textContent=`${q.price.toFixed(2)} ${q.currency} (${sign}${q.chg.toFixed(2)}%)`;
+      document.getElementById('cLive').style.color=up?'var(--green)':'var(--red)';
+    }
+    toast('↻ Kurse aktualisiert');
+  }, 60000);
+}
+
+init();
+</script>
+</body>
+</html>
